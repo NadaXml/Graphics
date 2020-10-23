@@ -144,7 +144,7 @@ namespace UnityEngine.Experimental.Rendering.Universal
 
                                 if (blendStyleUsed)
                                 {
-                                    var identifier = layerBatch.GetRTId(cmd, desc, blendStyleIndex);
+                                    var identifier = layerBatch.GetRTId(blendStyleIndex);
                                     cmd.SetGlobalTexture(k_ShapeLightTextureIDs[blendStyleIndex], identifier);
                                 }
 

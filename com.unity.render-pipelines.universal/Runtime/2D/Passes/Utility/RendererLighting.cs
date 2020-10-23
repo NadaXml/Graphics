@@ -144,8 +144,16 @@ namespace UnityEngine.Experimental.Rendering.Universal
             cmd.ReleaseTemporaryRT(pass.rendererData.shadowsRenderTarget.id);
         }
 
-        private static void RenderLightSet(IRenderPass2D pass, RenderingData renderingData, int blendStyleIndex, CommandBuffer cmd, int layerToRender, RenderTargetIdentifier renderTexture, List<Light2D> lights)
+        private static void RenderLightSet(IRenderPass2D pass, RenderingData renderingData, int blendStyleIndex,
+                                           CommandBuffer cmd, int layerToRender, ref LayerBatch layerBatch,
+                                           ref RenderTextureDescriptor rtDesc, List<Light2D> lights)
         {
+            if (!Light2DManager.GetGlobalColor(layerToRender, blendStyleIndex, out var clearColor))
+                clearColor = Color.black;
+
+            bool targetCreated = false;
+            RenderTargetIdentifier renderTexture = default;
+
             foreach (var light in lights)
             {
                 if (light != null &&
@@ -161,6 +169,20 @@ namespace UnityEngine.Experimental.Rendering.Universal
                     var lightMesh = light.lightMesh;
                     if (lightMesh == null)
                         continue;
+
+                    if (!targetCreated)
+                    {
+                        renderTexture = layerBatch.CreateRT(cmd, rtDesc, FilterMode.Bilinear, blendStyleIndex);
+
+                        cmd.SetRenderTarget(renderTexture,
+                            RenderBufferLoadAction.DontCare,
+                            RenderBufferStoreAction.Store,
+                            RenderBufferLoadAction.DontCare,
+                            RenderBufferStoreAction.DontCare);
+                        cmd.ClearRenderTarget(false, true, clearColor);
+
+                        targetCreated = true;
+                    }
 
                     ShadowRendering.RenderShadows(pass, renderingData, cmd, layerToRender, light, light.shadowIntensity, renderTexture, renderTexture);
 
@@ -188,6 +210,20 @@ namespace UnityEngine.Experimental.Rendering.Universal
                         cmd.DrawMesh(lightMesh, matrix, lightMaterial);
                     }
                 }
+            }
+
+            if (!targetCreated) // No light was actually rendered -- we use a tiny RT to save on bandwidth
+            {
+                var tinyDesc = rtDesc;
+                tinyDesc.width = tinyDesc.height = 4;
+
+                renderTexture = layerBatch.CreateRT(cmd, tinyDesc, FilterMode.Point, blendStyleIndex);
+                cmd.SetRenderTarget(renderTexture,
+                    RenderBufferLoadAction.DontCare,
+                    RenderBufferStoreAction.Store,
+                    RenderBufferLoadAction.DontCare,
+                    RenderBufferStoreAction.DontCare);
+                cmd.ClearRenderTarget(false, true, clearColor);
             }
         }
 
@@ -371,24 +407,13 @@ namespace UnityEngine.Experimental.Rendering.Universal
                 var sampleName = blendStyles[i].name;
                 cmd.BeginSample(sampleName);
 
-                if (!Light2DManager.GetGlobalColor(layerToRender, i, out var clearColor))
-                    clearColor = Color.black;
-
-                var identifier =  layerBatch.GetRTId(cmd, rtDesc, i);
-
-                cmd.SetRenderTarget(identifier,
-                    RenderBufferLoadAction.DontCare,
-                    RenderBufferStoreAction.Store,
-                    RenderBufferLoadAction.DontCare,
-                    RenderBufferStoreAction.DontCare);
-                cmd.ClearRenderTarget(false, true, clearColor);
-
                 RenderLightSet(
                     pass, renderingData,
                     i,
                     cmd,
                     layerToRender,
-                    identifier,
+                    ref layerBatch,
+                    ref rtDesc,
                     pass.rendererData.lightCullResult.visibleLights
                 );
 

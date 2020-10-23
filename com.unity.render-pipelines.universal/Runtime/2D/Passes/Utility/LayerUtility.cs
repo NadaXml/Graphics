@@ -24,15 +24,22 @@ namespace UnityEngine.Experimental.Rendering.Universal
             }
         }
 
-        public RenderTargetIdentifier GetRTId(CommandBuffer cmd, RenderTextureDescriptor desc, int index)
+        public RenderTargetIdentifier CreateRT(CommandBuffer cmd, RenderTextureDescriptor desc, FilterMode filter, int index)
         {
             unsafe
             {
-                if (!renderTargetUsed[index])
-                {
-                    cmd.GetTemporaryRT(renderTargetIds[index], desc, FilterMode.Bilinear);
-                    renderTargetUsed[index] = true;
-                }
+                Debug.Assert(!renderTargetUsed[index]);
+                cmd.GetTemporaryRT(renderTargetIds[index], desc, filter);
+                renderTargetUsed[index] = true;
+                return new RenderTargetIdentifier(renderTargetIds[index]);
+            }
+        }
+
+        public RenderTargetIdentifier GetRTId(int index)
+        {
+            unsafe
+            {
+                Debug.Assert(renderTargetUsed[index]);
                 return new RenderTargetIdentifier(renderTargetIds[index]);
             }
         }
